@@ -22,6 +22,13 @@ class GeomapHelper extends AppHelper {
 	);
 
 	/**
+     * Tells if JS resource was included
+	 *
+	 * @var bool
+	 */
+	private $included = false;
+
+	/**
 	 * Get map HTML + JS code
 	 *
 	 * @param array $center If specified, center map in this location
@@ -56,7 +63,10 @@ class GeomapHelper extends AppHelper {
 			return false;
 		}
 
-		$this->Javascript->link(str_replace('${key}', $parameters['key'], $this->services[$service]['url']), false);
+		if (!$this->included) {
+			$this->included = true;
+			$this->Javascript->link(str_replace('${key}', $parameters['key'], $this->services[$service]['url']), false);
+		}
 
 		$out = '';
 
