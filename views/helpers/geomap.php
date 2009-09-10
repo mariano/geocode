@@ -14,7 +14,7 @@ class GeomapHelper extends AppHelper {
 	 */
 	protected $services = array(
 		'google' => array(
-			'url' => 'http://www.google.com/jsapi?key=${key}'
+			'url' => 'http://www.google.com/jsapi'
 		),
 		'yahoo' => array(
 			'url' => 'http://api.maps.yahoo.com/ajaxymap?v=3.8&appid=${key}'
@@ -46,20 +46,27 @@ class GeomapHelper extends AppHelper {
 			'zoom' => 10,
 			'div' => array(),
 			'type' => 'street',
-			'layout' => array(
-				'pan',
-				'panAndZoom',
-				'scale',
-				'types',
-				'zoom'
+			'layout' => Configure::read('Geocode.layout'),
+			'layouts' => array(
+				'default' => array(
+					'pan',
+					'scale',
+					'types',
+					'zoom'
+				),
+				'simple' => false
 			)
 		), $parameters);
+
+		if (empty($parameters['layout'])) {
+			$parameters['layout'] = 'default';
+		}
 
 		if (empty($parameters['service'])) {
 			$parameters['service'] = 'google';
 		}
 		$service = strtolower($parameters['service']);
-		if (!isset($this->services[$service]) || empty($parameters['key'])) {
+		if (!isset($this->services[$service])) {
 			return false;
 		}
 
@@ -114,6 +121,15 @@ class GeomapHelper extends AppHelper {
 			$center = !empty($markers) ? $markers[0]['point'] : array(0, 0);
 		}
 
+		if (!empty($parameters['layout'])) {
+			if (!is_array($parameters['layout'])) {
+				if (!array_key_exists($parameters['layout'], $parameters['layouts'])) {
+					$parameters['layout'] = 'default';
+				}
+				$parameters['layout'] = $parameters['layouts'][$parameters['layout']];
+			}
+		}
+
 		$out .= $this->{'_'.$service}($parameters['id'], $center, $markers, $parameters);
 		return $out;
 	}
@@ -130,27 +146,28 @@ class GeomapHelper extends AppHelper {
 	protected function _google($id, $center, $markers, $parameters) {
 		$varName = 'm' . $id;
 		$mapTypes = array(
-			'street' => 'G_NORMAL_MAP',
-			'satellite' => 'G_SATELLITE_MAP',
-			'hybrid' => 'G_HYBRID_MAP'
+			'street' => 'google.maps.MapTypeId.ROADMAP',
+			'satellite' => 'google.maps.MapTypeId.SATELLITE',
+			'hybrid' => 'google.maps.MapTypeId.HYBRID',
+			'terrain' => 'google.maps.MapTypeId.TERRAIN'
 		);
 		$layouts = array(
 			'elements' => array(
-				'panAndZoom' => '${var}.addControl(new google.maps.LargeMapControl3D())',
-				'scale' => '${var}.addControl(new google.maps.ScaleControl())',
-				'types' => '${var}.addControl(new google.maps.MapTypeControl())',
-				'zoom' => '${var}.addControl(new google.maps.SmallZoomControl3D())'
+				'scale' => 'scaleControl',
+				'types' => 'mapTypeControl',
+				'zoom' => 'navigationControl',
+				'pan' => 'navigationControl'
 			)
 		);
 
 		$script = '
 			var ' . $varName . ' = null;
-			google.load("maps", "2");
+			google.load("maps", "3", {other_params: "sensor=' . (!empty($parameters['sensor']) ? 'true' : 'false') . '"});
 			google.setOnLoadCallback(function () {
-				if (!google.maps.BrowserIsCompatible()) {
-					return false;
-				}
-				var mapOptions = {};
+				var mapOptions = {
+					mapTypeId: ' . $mapTypes[$parameters['type']] . ',
+					disableDefaultUI: true
+				};
 		';
 
 		if (!empty($parameters['width']) && !empty($parameters['height'])) {
@@ -159,48 +176,17 @@ class GeomapHelper extends AppHelper {
 			';
 		}
 
-		$script .= '
-				' . $varName . ' = new google.maps.Map2(document.getElementById("' . $id . '"), mapOptions);
-				' . $varName . '.setMapType(' . $mapTypes[$parameters['type']] . ');
-		';
-
 		if (!empty($center)) {
 			list($latitude, $longitude) = $center;
-			$script .= $varName . '.setCenter(new google.maps.LatLng(' . $latitude . ', ' .	$longitude . '));' . "\n";
+			$script .= '
+				mapOptions.center = new google.maps.LatLng(' . $latitude . ', ' .	$longitude . ');
+			';
 		}
 
 		if (!empty($parameters['zoom'])) {
-			$script .= $varName . '.setZoom(' . $parameters['zoom'] . ');' . "\n";
-		}
-
-		if (!empty($markers)) {
-			foreach($markers as $marker) {
-				$markerOptions = array(
-					'title' => null,
-					'content' => null
-				);
-				$markerOptions = array_filter(array_intersect_key($marker, $markerOptions));
-				$content = (!empty($markerOptions['content']) ? $markerOptions['content'] : null);
-				if (!empty($content)) {
-					unset($markerOptions['content']);
-				}
-
-				$markerOptions = !empty($markerOptions) ? $this->Javascript->object($markerOptions) : '{}';
-				list($latitude, $longitude) = $marker['point'];
-				$script .= '
-					marker = new google.maps.Marker(new google.maps.LatLng(' . $latitude . ', ' . $longitude . '), ' . $markerOptions . ');
-				';
-
-				if (!empty($content)) {
-					$script .= '
-						google.maps.Event.addListener(marker, \'click\', function() {
-							marker.openInfoWindowHtml("' . $content . '");
-						});
-					';
-				}
-
-				$script .= $varName . '.addOverlay(marker);' . "\n";
-			}
+			$script .= '
+				mapOptions.zoom = ' . $parameters['zoom'] . ';
+			';
 		}
 
 		if (!empty($parameters['layout'])) {
@@ -213,13 +199,66 @@ class GeomapHelper extends AppHelper {
 				$parameters['layout'][$element] = $enabled;
 			}
 
-			if (!empty($parameters['layout']['panAndZoom']) && !empty($parameters['layout']['zoom'])) {
-				$parameters['layout']['zoom'] = false;
-			}
-
 			foreach($parameters['layout'] as $element => $enabled) {
-				if ($enabled && !empty($layouts['elements'][$element])) {
-					$script .= str_replace('${var}', $varName, $layouts['elements'][$element]) . ';' . "\n";
+				if (empty($layouts['elements'][$element])) {
+					continue;
+				} else if ($element == 'zoom' && !empty($parameters['layout']['pan'])) {
+					continue;
+				}
+
+				$key = $layouts['elements'][$element];
+				$value = !empty($enabled) ? 'true' : 'false';
+				if ($element == 'zoom' && empty($parameters['layout']['pan'])) {
+					$value = 'google.maps.NavigationControlStyle.SMALL';
+				} elseif ($element == 'pan') {
+					$value = 'google.maps.NavigationControlStyle.ZOOM_PAN';
+				}
+
+				if (!in_array($value, array('true', 'false'))) {
+					$script .= '
+						mapOptions.' . $key . ' = true;
+						mapOptions.' . $key . 'Options = { style: ' . $value . ' };
+					';
+				} else {
+					$script .= '
+						mapOptions.' . $key . ' = ' . $value . ';
+					';
+				}
+			}
+		}
+
+		$script .= $varName . ' = new google.maps.Map(document.getElementById("' . $id . '"), mapOptions);';
+
+		if (!empty($markers)) {
+			foreach($markers as $marker) {
+				$markerOptions = array(
+					'title' => null,
+					'content' => null,
+					'icon' => null
+				);
+				$markerOptions = array_filter(array_intersect_key($marker, $markerOptions));
+				$content = (!empty($markerOptions['content']) ? $markerOptions['content'] : null);
+
+				list($latitude, $longitude) = $marker['point'];
+				$script .= '
+					marker = new google.maps.Marker({
+						map: ' . $varName . ',
+						position: new google.maps.LatLng(' . $latitude . ', ' . $longitude . '),
+						title: "' . (!empty($options['title']) ? $options['title'] : '') . '",
+						clickable: ' . (!empty($options['content']) ? 'false' : 'true') . '
+					});
+				';
+
+				if (!empty($content)) {
+					$script .= '
+						infoWindow = new google.maps.InfoWindow({
+							content: "' . $content . '"
+						});
+						google.maps.event.addListener(marker, \'click\', function() {
+							infoWindow.open(' . $varName . ', marker);
+						});
+					';
+
 				}
 			}
 		}
