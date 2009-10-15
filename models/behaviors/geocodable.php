@@ -270,8 +270,10 @@ class GeocodableBehavior extends ModelBehavior {
 			$data[$model->alias][$settings['fields']['latitude']] = $coordinates[0];
 			$data[$model->alias][$settings['fields']['longitude']] = $coordinates[1];
 
-			$model->create();
-			$model->save($data);
+			if (!empty($data[$model->alias][$settings['fields']['state']])) {
+				$model->create();
+				$model->save($data);
+			}
 		}
 
 		return $coordinates;

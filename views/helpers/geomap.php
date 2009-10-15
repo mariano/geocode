@@ -44,7 +44,7 @@ class GeomapHelper extends AppHelper {
 			'width' => 500,
 			'height' => 300,
 			'zoom' => 10,
-			'div' => array(),
+			'div' => array('class'=>'map'),
 			'type' => 'street',
 			'layout' => Configure::read('Geocode.layout'),
 			'layouts' => array(
@@ -79,6 +79,9 @@ class GeomapHelper extends AppHelper {
 
 		if (empty($parameters['id'])) {
 			$parameters['id'] = 'map_' . Security::hash(uniqid(time(), true));
+		}
+
+		if ($parameters['div'] !== false) {
 			$out .= $this->Html->div(
 				!empty($parameters['div']['class']) ? $parameters['div']['class'] : null,
 				'<!-- ' . $service . ' map -->',
