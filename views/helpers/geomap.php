@@ -97,7 +97,9 @@ class GeomapHelper extends AppHelper {
 				$marker = array_merge(array(
 					'point' => null,
 					'title' => null,
-					'content' => null
+					'content' => null,
+					'icon' => null,
+					'shadow' => null
 				), $marker);
 
 				if (empty($marker['point'])) {
@@ -237,7 +239,8 @@ class GeomapHelper extends AppHelper {
 				$markerOptions = array(
 					'title' => null,
 					'content' => null,
-					'icon' => null
+					'icon' => null,
+					'shadow' => null
 				);
 				$markerOptions = array_filter(array_intersect_key($marker, $markerOptions));
 				$content = (!empty($markerOptions['content']) ? $markerOptions['content'] : null);
@@ -247,8 +250,10 @@ class GeomapHelper extends AppHelper {
 					marker = new google.maps.Marker({
 						map: ' . $varName . ',
 						position: new google.maps.LatLng(' . $latitude . ', ' . $longitude . '),
-						title: "' . (!empty($options['title']) ? $options['title'] : '') . '",
-						clickable: ' . (!empty($options['content']) ? 'false' : 'true') . '
+						title: "' . (!empty($markerOptions['title']) ? $markerOptions['title'] : '') . '",
+						clickable: ' . (!empty($content) ? 'true' : 'false') . ',
+						icon: ' . (!empty($markerOptions['icon']) ? '"' . $markerOptions['icon'] . '"' : 'null') . ',
+						shadow: ' . (!empty($markerOptions['shadow']) ? '"' . $markerOptions['shadow'] . '"' : 'null') . '
 					});
 				';
 
