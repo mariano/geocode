@@ -369,7 +369,7 @@ class GeocodableBehavior extends ModelBehavior {
 			deg2rad($point2[1] - $point1[1])
 		);
 		$angle = sin($line[0]/2) * sin($line[0]/2) + sin($line[1]/2) * sin($line[1]/2) * cos(deg2rad($point1[0])) * cos(deg2rad($point2[0]));
-		$earthRadiusKm = 6371;
+		$earthRadiusKm = 6378;
 		return ($earthRadiusKm * 2 * atan2(sqrt($angle), sqrt(1 - $angle))) * $this->units[strtolower($unit)];
 	}
 
@@ -394,8 +394,9 @@ class GeocodableBehavior extends ModelBehavior {
 			$model->escapeField($settings['fields']['latitude']),
 			$model->escapeField($settings['fields']['longitude']),
 		);
-		$earthRadiusKm = 6371;
 
+		/*
+		$earthRadiusKm = 6371;
 		$expression = '(' . $earthRadiusKm . ' * 2 * ATAN2(
 			SQRT(
 				SIN(RADIANS(' . $latitude . ' - ' . $latitudeField . ')/2) * SIN(RADIANS(' . $latitude . ' - ' . $latitudeField . ')/2) +
@@ -408,6 +409,16 @@ class GeocodableBehavior extends ModelBehavior {
 				COS(RADIANS(' . $latitude . ')) * COS(RADIANS(' . $longitude . '))
 			))
 		) * ' . $this->units[strtolower($unit)] . ')';
+		*/
+
+		 $expression = 'SQRT(
+			 POW((COS(RADIANS(' . $latitude . ')) * COS(RADIANS(' . $longitude . '))
+			 - COS(RADIANS(' . $latitudeField . ')) * COS(RADIANS(' . $longitudeField . '))), 2) +
+			 POW((COS(RADIANS(' . $latitude . ')) * SIN(RADIANS(' . $longitude . '))
+			 - COS(RADIANS(' . $latitudeField . ')) * SIN(RADIANS(' . $longitudeField . '))), 2) +
+			 POW((SIN(RADIANS(' . $latitude . '))
+			 - SIN(RADIANS(' . $latitudeField . '))), 2)
+		 )';
 
 		$expression = str_replace("\n", ' ', $expression);
 		$query = array(
@@ -419,7 +430,9 @@ class GeocodableBehavior extends ModelBehavior {
 		);
 
 		if (!empty($distance)) {
-			$query['conditions'][] = $expression . ' <= ' . $distance;
+			$earthRadiusKm = 6378;
+			$ratio = $earthRadiusKm * $this->units[strtolower($unit)];
+			$query['conditions'][] = '(' . $expression . ' * ' . $ratio . ') <= ' . $distance;
 		}
 
 		return $query;
