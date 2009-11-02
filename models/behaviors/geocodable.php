@@ -395,22 +395,6 @@ class GeocodableBehavior extends ModelBehavior {
 			$model->escapeField($settings['fields']['longitude']),
 		);
 
-		/*
-		$earthRadiusKm = 6371;
-		$expression = '(' . $earthRadiusKm . ' * 2 * ATAN2(
-			SQRT(
-				SIN(RADIANS(' . $latitude . ' - ' . $latitudeField . ')/2) * SIN(RADIANS(' . $latitude . ' - ' . $latitudeField . ')/2) +
-				SIN(RADIANS(' . $longitude . ' - ' . $longitudeField . ')/2) * SIN(RADIANS(' . $longitude . ' - ' . $longitudeField . ')/2) *
-				COS(RADIANS(' . $latitude . ')) * COS(RADIANS(' . $longitude . '))
-			),
-			SQRT(1 - (
-				SIN(RADIANS(' . $latitude . ' - ' . $latitudeField . ')/2) * SIN(RADIANS(' . $latitude . ' - ' . $latitudeField . ')/2) +
-				SIN(RADIANS(' . $longitude . ' - ' . $longitudeField . ')/2) * SIN(RADIANS(' . $longitude . ' - ' . $longitudeField . ')/2) *
-				COS(RADIANS(' . $latitude . ')) * COS(RADIANS(' . $longitude . '))
-			))
-		) * ' . $this->units[strtolower($unit)] . ')';
-		*/
-
 		 $expression = 'SQRT(
 			 POW((COS(RADIANS(' . $latitude . ')) * COS(RADIANS(' . $longitude . '))
 			 - COS(RADIANS(' . $latitudeField . ')) * COS(RADIANS(' . $longitudeField . '))), 2) +
