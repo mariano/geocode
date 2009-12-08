@@ -14,7 +14,7 @@ class GeomapHelper extends AppHelper {
 	 */
 	protected $services = array(
 		'google' => array(
-			'url' => 'http://www.google.com/jsapi'
+			'url' => 'http://www.google.com/jsapi?key=${key}'
 		),
 		'yahoo' => array(
 			'url' => 'http://api.maps.yahoo.com/ajaxymap?v=3.8&appid=${key}'
@@ -145,7 +145,7 @@ class GeomapHelper extends AppHelper {
 	 * @param string $id Container ID
 	 * @param array $center If specified, center map in this location
 	 * @param array $markers Add these markers (each marker is array('point' => (x, y), 'title' => '', 'content' => ''))
-	 * @param array $parameters Parameters (service, key, id, width, height, zoom, div)
+	 * @param array $parameters Parameters (service, version, key, id, width, height, zoom, div)
 	 * @return string HTML + JS code
 	 */
 	protected function _google($id, $center, $markers, $parameters) {
@@ -164,75 +164,104 @@ class GeomapHelper extends AppHelper {
 				'pan' => 'navigationControl'
 			)
 		);
+		$parameters = array_merge(array(
+			'version' => 2
+		), $parameters);
 
-		$script = '
-			var ' . $varName . ' = null;
-			google.load("maps", "3", {other_params: "sensor=' . (!empty($parameters['sensor']) ? 'true' : 'false') . '"});
-			google.setOnLoadCallback(function () {
+		$script = 'var ' . $varName . '_Callback = function() {';
+
+		if ($parameters['version'] >= 3) {
+			$script .= '
 				var mapOptions = {
 					mapTypeId: ' . $mapTypes[$parameters['type']] . ',
 					disableDefaultUI: true
 				};
-		';
-
-		if (!empty($parameters['width']) && !empty($parameters['height'])) {
-			$script .= '
-				mapOptions.size = new google.maps.Size(' . $parameters['width'] . ', ' . $parameters['height'] . ');
 			';
-		}
 
-		if (!empty($center)) {
-			list($latitude, $longitude) = $center;
-			$script .= '
-				mapOptions.center = new google.maps.LatLng(' . $latitude . ', ' .	$longitude . ');
-			';
-		}
-
-		if (!empty($parameters['zoom'])) {
-			$script .= '
-				mapOptions.zoom = ' . $parameters['zoom'] . ';
-			';
-		}
-
-		if (!empty($parameters['layout'])) {
-			foreach($parameters['layout'] as $element => $enabled) {
-				unset($parameters['layout'][$element]);
-				if (is_numeric($element)) {
-					$element = $enabled;
-					$enabled = true;
-				}
-				$parameters['layout'][$element] = $enabled;
+			if (!empty($parameters['width']) && !empty($parameters['height'])) {
+				$script .= '
+					mapOptions.size = new google.maps.Size(' . $parameters['width'] . ', ' . $parameters['height'] . ');
+				';
 			}
 
-			foreach($parameters['layout'] as $element => $enabled) {
-				if (empty($layouts['elements'][$element])) {
-					continue;
-				} else if ($element == 'zoom' && !empty($parameters['layout']['pan'])) {
-					continue;
+			if (!empty($center)) {
+				list($latitude, $longitude) = $center;
+				$script .= '
+					mapOptions.center = new google.maps.LatLng(' . $latitude . ', ' .	$longitude . ');
+				';
+			}
+
+			if (!empty($parameters['zoom'])) {
+				$script .= '
+					mapOptions.zoom = ' . $parameters['zoom'] . ';
+				';
+			}
+
+			if (!empty($parameters['layout'])) {
+				foreach($parameters['layout'] as $element => $enabled) {
+					unset($parameters['layout'][$element]);
+					if (is_numeric($element)) {
+						$element = $enabled;
+						$enabled = true;
+					}
+					$parameters['layout'][$element] = $enabled;
 				}
 
-				$key = $layouts['elements'][$element];
-				$value = !empty($enabled) ? 'true' : 'false';
-				if ($element == 'zoom' && empty($parameters['layout']['pan'])) {
-					$value = 'google.maps.NavigationControlStyle.SMALL';
-				} elseif ($element == 'pan') {
-					$value = 'google.maps.NavigationControlStyle.ZOOM_PAN';
-				}
+				foreach($parameters['layout'] as $element => $enabled) {
+					if (empty($layouts['elements'][$element])) {
+						continue;
+					} else if ($element == 'zoom' && !empty($parameters['layout']['pan'])) {
+						continue;
+					}
 
-				if (!in_array($value, array('true', 'false'))) {
-					$script .= '
-						mapOptions.' . $key . ' = true;
-						mapOptions.' . $key . 'Options = { style: ' . $value . ' };
-					';
-				} else {
-					$script .= '
-						mapOptions.' . $key . ' = ' . $value . ';
-					';
+					$key = $layouts['elements'][$element];
+					$value = !empty($enabled) ? 'true' : 'false';
+					if ($element == 'zoom' && empty($parameters['layout']['pan'])) {
+						$value = 'google.maps.NavigationControlStyle.SMALL';
+					} elseif ($element == 'pan') {
+						$value = 'google.maps.NavigationControlStyle.ZOOM_PAN';
+					}
+
+					if (!in_array($value, array('true', 'false'))) {
+						$script .= '
+							mapOptions.' . $key . ' = true;
+							mapOptions.' . $key . 'Options = { style: ' . $value . ' };
+						';
+					} else {
+						$script .= '
+							mapOptions.' . $key . ' = ' . $value . ';
+						';
+					}
 				}
 			}
-		}
 
-		$script .= $varName . ' = new google.maps.Map(document.getElementById("' . $id . '"), mapOptions);';
+			$script .= $varName . ' = new google.maps.Map(document.getElementById("' . $id . '"), mapOptions);';
+
+		} else {
+			$script .= '
+			if (!google.maps.BrowserIsCompatible()) {
+				return false;
+			}
+
+			var mapOptions = {};
+			';
+
+			if (!empty($parameters['width']) && !empty($parameters['height'])) {
+				$script .= '
+					mapOptions.size = new google.maps.Size(' . $parameters['width'] . ', ' . $parameters['height'] . ');
+				';
+			}
+
+			$script .= $varName . ' = new google.maps.Map2(document.getElementById("' . $id . '"), mapOptions);';
+
+			if (!empty($center)) {
+				list($latitude, $longitude) = $center;
+				$script .= $varName . '.setCenter(
+					new google.maps.LatLng(' . $latitude . ', ' . $longitude . ')' .
+					(!empty($parameters['zoom']) ? ', ' . $parameters['zoom'] : '') . '
+				);';
+			}
+		}
 
 		if (!empty($markers)) {
 			foreach($markers as $marker) {
@@ -246,32 +275,62 @@ class GeomapHelper extends AppHelper {
 				$content = (!empty($markerOptions['content']) ? $markerOptions['content'] : null);
 
 				list($latitude, $longitude) = $marker['point'];
-				$script .= '
-					marker = new google.maps.Marker({
-						map: ' . $varName . ',
-						position: new google.maps.LatLng(' . $latitude . ', ' . $longitude . '),
-						title: "' . (!empty($markerOptions['title']) ? $markerOptions['title'] : '') . '",
-						clickable: ' . (!empty($content) ? 'true' : 'false') . ',
-						icon: ' . (!empty($markerOptions['icon']) ? '"' . $markerOptions['icon'] . '"' : 'null') . ',
-						shadow: ' . (!empty($markerOptions['shadow']) ? '"' . $markerOptions['shadow'] . '"' : 'null') . '
-					});
-				';
 
-				if (!empty($content)) {
+				if ($parameters['version'] >= 3) {
 					$script .= '
-						infoWindow = new google.maps.InfoWindow({
-							content: "' . $content . '"
-						});
-						google.maps.event.addListener(marker, \'click\', function() {
-							infoWindow.open(' . $varName . ', marker);
+						marker = new google.maps.Marker({
+							map: ' . $varName . ',
+							position: new google.maps.LatLng(' . $latitude . ', ' . $longitude . '),
+							title: "' . (!empty($markerOptions['title']) ? $markerOptions['title'] : '') . '",
+							clickable: ' . (!empty($content) ? 'true' : 'false') . ',
+							icon: ' . (!empty($markerOptions['icon']) ? '"' . $markerOptions['icon'] . '"' : 'null') . ',
+							shadow: ' . (!empty($markerOptions['shadow']) ? '"' . $markerOptions['shadow'] . '"' : 'null') . '
 						});
 					';
 
+					if (!empty($content)) {
+						$script .= '
+							infoWindow = new google.maps.InfoWindow({
+								content: "' . $content . '"
+							});
+							google.maps.event.addListener(marker, \'click\', function() {
+								infoWindow.open(' . $varName . ', marker);
+							});
+						';
+
+					}
+				} else {
+					$script .= 'markerOptions = {};';
+
+					if (!empty($parameters['icon'])) {
+						$script .= '
+							markerIcon = new google.maps.Icon(google.maps.DEFAULT_ICON);
+							markerIcon.image = "' . $parameters['icon'] . '";
+							markerOptions.icon = markerIcon;
+						';
+					}
+
+					$script .= 'marker = new google.maps.Marker(new google.maps.LatLng(' . $latitude . ', ' . $longitude . '), markerOptions);';
+					$script .= $varName . '.addOverlay(marker);';
+
+					if (!empty($content)) {
+						$script .= 'google.maps.Event.addListener(marker, \'click\', function() {
+							marker.openInfoWindowHtml("' . $content . '");
+						});
+						';
+					}
 				}
 			}
 		}
 
-		$script .= '});';
+		$script .= '
+		}
+
+		var ' . $varName . ' = null;
+		google.load("maps", "' . $parameters['version'] . '", {
+			other_params: "sensor=' . (!empty($parameters['sensor']) ? 'true' : 'false') . '",
+			callback: ' . $varName . '_Callback
+		});';
 
 		return $this->Javascript->codeBlock($script);
 	}
