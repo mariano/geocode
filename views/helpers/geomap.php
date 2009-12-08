@@ -149,25 +149,54 @@ class GeomapHelper extends AppHelper {
 	 * @return string HTML + JS code
 	 */
 	protected function _google($id, $center, $markers, $parameters) {
-		$varName = 'm' . $id;
-		$mapTypes = array(
-			'street' => 'google.maps.MapTypeId.ROADMAP',
-			'satellite' => 'google.maps.MapTypeId.SATELLITE',
-			'hybrid' => 'google.maps.MapTypeId.HYBRID',
-			'terrain' => 'google.maps.MapTypeId.TERRAIN'
-		);
-		$layouts = array(
-			'elements' => array(
-				'scale' => 'scaleControl',
-				'types' => 'mapTypeControl',
-				'zoom' => 'navigationControl',
-				'pan' => 'navigationControl'
-			)
-		);
 		$parameters = array_merge(array(
 			'version' => 2
 		), $parameters);
 
+		if ($parameters['version'] >= 3) {
+			$mapTypes = array(
+				'street' => 'google.maps.MapTypeId.ROADMAP',
+				'satellite' => 'google.maps.MapTypeId.SATELLITE',
+				'hybrid' => 'google.maps.MapTypeId.HYBRID',
+				'terrain' => 'google.maps.MapTypeId.TERRAIN'
+			);
+			$layouts = array(
+				'elements' => array(
+					'scale' => 'scaleControl',
+					'types' => 'mapTypeControl',
+					'zoom' => 'navigationControl',
+					'pan' => 'navigationControl'
+				)
+			);
+		} else {
+			$mapTypes = array(
+				'street' => 'google.maps.maptypes.normal',
+				'satellite' => 'google.maps.maptypes.satellite',
+				'hybrid' => 'google.maps.maptypes.hybrid',
+				'terrain' => 'google.maps.maptypes.physical'
+			);
+			$layouts = array(
+				'elements' => array(
+					'scale' => 'google.maps.ScaleControl',
+					'types' => 'google.maps.MapTypeControl',
+					'zoom' => 'google.maps.LargeMapControl3D',
+					'pan' => 'google.maps.LargeMapControl3D'
+				)
+			);
+		}
+
+		if (!empty($parameters['layout'])) {
+			foreach($parameters['layout'] as $element => $enabled) {
+				unset($parameters['layout'][$element]);
+				if (is_numeric($element)) {
+					$element = $enabled;
+					$enabled = true;
+				}
+				$parameters['layout'][$element] = $enabled;
+			}
+		}
+
+		$varName = 'm' . $id;
 		$script = 'var ' . $varName . '_Callback = function() {';
 
 		if ($parameters['version'] >= 3) {
@@ -198,15 +227,6 @@ class GeomapHelper extends AppHelper {
 			}
 
 			if (!empty($parameters['layout'])) {
-				foreach($parameters['layout'] as $element => $enabled) {
-					unset($parameters['layout'][$element]);
-					if (is_numeric($element)) {
-						$element = $enabled;
-						$enabled = true;
-					}
-					$parameters['layout'][$element] = $enabled;
-				}
-
 				foreach($parameters['layout'] as $element => $enabled) {
 					if (empty($layouts['elements'][$element])) {
 						continue;
@@ -261,6 +281,20 @@ class GeomapHelper extends AppHelper {
 					(!empty($parameters['zoom']) ? ', ' . $parameters['zoom'] : '') . '
 				);';
 			}
+
+			if (!empty($parameters['layout'])) {
+				foreach($parameters['layout'] as $element => $enabled) {
+					if (empty($layouts['elements'][$element])) {
+						continue;
+					} else if ($element == 'zoom' && !empty($parameters['layout']['pan'])) {
+						continue;
+					} else if (!$enabled) {
+						continue;
+					}
+
+					$script .= $varName . '.addControl(new ' . $layouts['elements'][$element] . '());';
+				}
+			}
 		}
 
 		if (!empty($markers)) {
@@ -302,10 +336,10 @@ class GeomapHelper extends AppHelper {
 				} else {
 					$script .= 'markerOptions = {};';
 
-					if (!empty($parameters['icon'])) {
+					if (!empty($markerOptions['icon'])) {
 						$script .= '
 							markerIcon = new google.maps.Icon(google.maps.DEFAULT_ICON);
-							markerIcon.image = "' . $parameters['icon'] . '";
+							markerIcon.image = "' . $markerOptions['icon'] . '";
 							markerOptions.icon = markerIcon;
 						';
 					}
@@ -324,6 +358,7 @@ class GeomapHelper extends AppHelper {
 		}
 
 		$script .= '
+			' . $varName . '.__version__ = ' . $parameters['version'] . ';
 		}
 
 		var ' . $varName . ' = null;
