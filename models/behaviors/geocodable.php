@@ -105,7 +105,7 @@ class GeocodableBehavior extends ModelBehavior {
 				unset($settings['models'][$field]);
 				if (is_numeric($field) && !is_array($data)) {
 					$field = $data;
-					$data = array('model' => Inflectory::classify($field));
+					$data = array('model' => Inflector::classify($field));
 				} else if (is_numeric($field) && !empty($data['field'])) {
 					$field = $data['field'];
 				}
