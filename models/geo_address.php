@@ -5,7 +5,7 @@ class GeoAddress extends AppModel {
 	 *
 	 * @var array
 	 */
-	public $actsAs = array('Geocodable');
+	public $actsAs = array('Geocode.Geocodable');
 
 	/**
 	 * Overriden to implement 'near' find type, and support for 'count' with 'near'
