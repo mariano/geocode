@@ -298,6 +298,7 @@ class GeomapHelper extends AppHelper {
 		}
 
 		if (!empty($markers)) {
+			$i = 0;
 			foreach($markers as $marker) {
 				$markerOptions = array(
 					'title' => null,
@@ -312,7 +313,7 @@ class GeomapHelper extends AppHelper {
 
 				if ($parameters['version'] >= 3) {
 					$script .= '
-						marker = new google.maps.Marker({
+						marker'.$i.' = new google.maps.Marker({
 							map: ' . $varName . ',
 							position: new google.maps.LatLng(' . $latitude . ', ' . $longitude . '),
 							title: "' . (!empty($markerOptions['title']) ? $markerOptions['title'] : '') . '",
@@ -327,8 +328,8 @@ class GeomapHelper extends AppHelper {
 							infoWindow = new google.maps.InfoWindow({
 								content: "' . $content . '"
 							});
-							google.maps.event.addListener(marker, \'click\', function() {
-								infoWindow.open(' . $varName . ', marker);
+							google.maps.event.addListener(marker'.$i.', \'click\', function() {
+								infoWindow.open(' . $varName . ', marker'.$i.');
 							});
 						';
 
@@ -344,16 +345,17 @@ class GeomapHelper extends AppHelper {
 						';
 					}
 
-					$script .= 'marker = new google.maps.Marker(new google.maps.LatLng(' . $latitude . ', ' . $longitude . '), markerOptions);';
-					$script .= $varName . '.addOverlay(marker);';
+					$script .= 'marker'.$i.' = new google.maps.Marker(new google.maps.LatLng(' . $latitude . ', ' . $longitude . '), markerOptions);';
+					$script .= $varName . '.addOverlay(marker'.$i.');';
 
 					if (!empty($content)) {
-						$script .= 'google.maps.Event.addListener(marker, \'click\', function() {
-							marker.openInfoWindowHtml("' . $content . '");
+						$script .= 'google.maps.Event.addListener(marker'.$i.', \'click\', function() {
+							marker'.$i.'.openInfoWindowHtml("' . $content . '");
 						});
 						';
 					}
 				}
+				$i++;
 			}
 		}
 
