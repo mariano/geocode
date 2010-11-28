@@ -196,8 +196,8 @@ class GeomapHelper extends AppHelper {
 			}
 		}
 
-		$varName = 'm' . $id;
-		$script = 'var ' . $varName . '_Callback = function() {';
+		$mapVarName = 'm' . $id;
+		$script = 'var ' . $mapVarName . '_Callback = function() {';
 
 		if ($parameters['version'] >= 3) {
 			$script .= '
@@ -255,8 +255,7 @@ class GeomapHelper extends AppHelper {
 				}
 			}
 
-			$script .= $varName . ' = new google.maps.Map(document.getElementById("' . $id . '"), mapOptions);';
-
+			$script .= $mapVarName . ' = new google.maps.Map(document.getElementById("' . $id . '"), mapOptions);';
 		} else {
 			$script .= '
 			if (!google.maps.BrowserIsCompatible()) {
@@ -272,11 +271,11 @@ class GeomapHelper extends AppHelper {
 				';
 			}
 
-			$script .= $varName . ' = new google.maps.Map2(document.getElementById("' . $id . '"), mapOptions);';
+			$script .= $mapVarName . ' = new google.maps.Map2(document.getElementById("' . $id . '"), mapOptions);';
 
 			if (!empty($center)) {
 				list($latitude, $longitude) = $center;
-				$script .= $varName . '.setCenter(
+				$script .= $mapVarName . '.setCenter(
 					new google.maps.LatLng(' . $latitude . ', ' . $longitude . ')' .
 					(!empty($parameters['zoom']) ? ', ' . $parameters['zoom'] : '') . '
 				);';
@@ -292,14 +291,13 @@ class GeomapHelper extends AppHelper {
 						continue;
 					}
 
-					$script .= $varName . '.addControl(new ' . $layouts['elements'][$element] . '());';
+					$script .= $mapVarName . '.addControl(new ' . $layouts['elements'][$element] . '());';
 				}
 			}
 		}
 
 		if (!empty($markers)) {
-			$i = 0;
-			foreach($markers as $marker) {
+			foreach($markers as $i => $marker) {
 				$markerOptions = array(
 					'title' => null,
 					'content' => null,
@@ -308,13 +306,14 @@ class GeomapHelper extends AppHelper {
 				);
 				$markerOptions = array_filter(array_intersect_key($marker, $markerOptions));
 				$content = (!empty($markerOptions['content']) ? $markerOptions['content'] : null);
+                $markerVarName = 'marker'.$i;
 
 				list($latitude, $longitude) = $marker['point'];
 
 				if ($parameters['version'] >= 3) {
 					$script .= '
-						marker'.$i.' = new google.maps.Marker({
-							map: ' . $varName . ',
+						var '.$markerVarName.' = new google.maps.Marker({
+							map: ' . $mapVarName . ',
 							position: new google.maps.LatLng(' . $latitude . ', ' . $longitude . '),
 							title: "' . (!empty($markerOptions['title']) ? $markerOptions['title'] : '') . '",
 							clickable: ' . (!empty($content) ? 'true' : 'false') . ',
@@ -325,48 +324,47 @@ class GeomapHelper extends AppHelper {
 
 					if (!empty($content)) {
 						$script .= '
-							infoWindow = new google.maps.InfoWindow({
+							var '.$markerVarName.'InfoWindow = new google.maps.InfoWindow({
 								content: "' . $content . '"
 							});
-							google.maps.event.addListener(marker'.$i.', \'click\', function() {
-								infoWindow.open(' . $varName . ', marker'.$i.');
+							google.maps.event.addListener('.$markerVarName.', \'click\', function() {
+								'.$markerVarName.'InfoWindow.open(' . $mapVarName . ', '.$markerVarName.');
 							});
 						';
 
 					}
 				} else {
-					$script .= 'markerOptions = {};';
+					$script .= 'var '.$markerVarName.'Options = {};';
 
 					if (!empty($markerOptions['icon'])) {
 						$script .= '
-							markerIcon = new google.maps.Icon(google.maps.DEFAULT_ICON);
-							markerIcon.image = "' . $markerOptions['icon'] . '";
-							markerOptions.icon = markerIcon;
+							var '.$markerVarName.'Icon = new google.maps.Icon(google.maps.DEFAULT_ICON);
+							'.$markerVarName.'Icon.image = "' . $markerOptions['icon'] . '";
+							'.$markerVarName.'Options.icon = '.$markerVarName.'Icon;
 						';
 					}
 
-					$script .= 'marker'.$i.' = new google.maps.Marker(new google.maps.LatLng(' . $latitude . ', ' . $longitude . '), markerOptions);';
-					$script .= $varName . '.addOverlay(marker'.$i.');';
+					$script .= 'var '.$markerVarName.' = new google.maps.Marker(new google.maps.LatLng(' . $latitude . ', ' . $longitude . '), '.$markerVarName.'Options);';
+					$script .= $mapVarName.'.addOverlay('.$markerVarName.');';
 
 					if (!empty($content)) {
-						$script .= 'google.maps.Event.addListener(marker'.$i.', \'click\', function() {
-							marker'.$i.'.openInfoWindowHtml("' . $content . '");
+						$script .= 'google.maps.Event.addListener('.$markerVarName.', \'click\', function() {
+							'.$markerVarName.'.openInfoWindowHtml("' . $content . '");
 						});
 						';
 					}
 				}
-				$i++;
 			}
 		}
 
 		$script .= '
-			' . $varName . '.__version__ = ' . $parameters['version'] . ';
+			' . $mapVarName . '.__version__ = ' . $parameters['version'] . ';
 		}
 
-		var ' . $varName . ' = null;
+		var ' . $mapVarName . ' = null;
 		google.load("maps", "' . $parameters['version'] . '", {
 			other_params: "sensor=' . (!empty($parameters['sensor']) ? 'true' : 'false') . '",
-			callback: ' . $varName . '_Callback
+			callback: ' . $mapVarName . '_Callback
 		});';
 
 		return $this->Javascript->codeBlock($script);
@@ -382,7 +380,7 @@ class GeomapHelper extends AppHelper {
 	 * @return string HTML + JS code
 	 */
 	protected function _yahoo($id, $center, $markers, $parameters) {
-		$varName = 'm' . $id;
+		$mapVarName = 'm' . $id;
 		$mapTypes = array(
 			'street' => 'YAHOO_MAP_REG',
 			'satellite' => 'YAHOO_MAP_SAT',
@@ -398,25 +396,25 @@ class GeomapHelper extends AppHelper {
 		);
 
 		$script = '
-			var ' . $varName . ' = new YMap(document.getElementById("' . $id . '"));
+			var ' . $mapVarName . ' = new YMap(document.getElementById("' . $id . '"));
 		';
 
-		$script .= $varName . '.setMapType(' . $mapTypes[$parameters['type']] . ');' . "\n";
+		$script .= $mapVarName . '.setMapType(' . $mapTypes[$parameters['type']] . ');' . "\n";
 
 		if (!empty($center)) {
 			list($latitude, $longitude) = $center;
-			$script .= $varName . '.drawZoomAndCenter(new YGeoPoint(' . $latitude . ', ' . $longitude . '));' . "\n";
+			$script .= $mapVarName . '.drawZoomAndCenter(new YGeoPoint(' . $latitude . ', ' . $longitude . '));' . "\n";
 		}
 
 		if (!empty($parameters['width']) && !empty($parameters['height'])) {
-			$script .= $varName . '.resizeTo(new YSize(' . $parameters['width'] . ', ' . $parameters['height'] . '));' . "\n";
+			$script .= $mapVarName . '.resizeTo(new YSize(' . $parameters['width'] . ', ' . $parameters['height'] . '));' . "\n";
 		}
 
 		if (!empty($parameters['zoom'])) {
-			$script .= $varName . '.setZoomLevel(' . $parameters['zoom'] . ');' . "\n";
+			$script .= $mapVarName . '.setZoomLevel(' . $parameters['zoom'] . ');' . "\n";
 		}
 
-		$script .= $varName . '.removeZoomScale();' . "\n";
+		$script .= $mapVarName . '.removeZoomScale();' . "\n";
 
 		if (!empty($parameters['layout'])) {
 			foreach($parameters['layout'] as $element => $enabled) {
@@ -430,24 +428,25 @@ class GeomapHelper extends AppHelper {
 
 			foreach($parameters['layout'] as $element => $enabled) {
 				if ($enabled && !empty($layouts['elements'][$element])) {
-					$script .= str_replace('${var}', $varName, $layouts['elements'][$element]) . ';' . "\n";
+					$script .= str_replace('${var}', $mapVarName, $layouts['elements'][$element]) . ';' . "\n";
 				}
 			}
 		}
 
 		if (!empty($markers)) {
-			foreach($markers as $marker) {
+			foreach($markers as $i => $marker) {
 				list($latitude, $longitude) = $marker['point'];
-				$script .= 'content = null' . "\n";
+                $markerVvarName = 'marker'.$i;
+				$script .= 'var '.$markerVarName.'Content = null' . "\n";
 				if (!empty($marker['content'])) {
-					$script .= 'content = "' . $marker['content'] . '";' . "\n";
+					$script .= $markerVarName.'Content = "' . $marker['content'] . '";' . "\n";
 				}
 				$script .= '
-					marker = new YMarker(new YGeoPoint(' . $latitude . ', ' . $longitude . '));
-					YEvent.Capture(marker, EventsList.MouseClick, function(o) {
-						marker.openSmartWindow(content);
+					var '.$markerVarName.' = new YMarker(new YGeoPoint(' . $latitude . ', ' . $longitude . '));
+					YEvent.Capture('.$markerVVarName.', EventsList.MouseClick, function(o) {
+						'.$markerVarName.'.openSmartWindow('.$markerVarName.'Content);
 					});
-					' . $varName . '.addOverlay(marker);
+					' . $mapVarName . '.addOverlay('.$markerVarName.');
 				';
 			}
 		}
