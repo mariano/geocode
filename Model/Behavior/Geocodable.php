@@ -1,5 +1,9 @@
 <?php
-App::import('Core', array('HttpSocket', 'Security'));
+
+App::uses('HttpSocket', 'Network/Http');
+App::uses('Security', 'Utility');
+App::uses('ModelBehavior', 'Model');
+App::uses('AppModel', 'Model');
 
 class GeocodableBehavior extends ModelBehavior {
 	/**
@@ -54,6 +58,13 @@ class GeocodableBehavior extends ModelBehavior {
 				'latitude' => 1,
 				'longitude' => 2
 			)
+		),
+		'google-json' => array(
+			'url' => 'http://maps.google.com/maps/geo?q=${address}&output=json&key=${key}',
+			'format' => '${address1} ${address2}, ${city}, ${zip} ${state}, ${country}',
+			'pattern' => false,
+			'matches' => array(),
+			'parser' => '_google_json_parser',
 		),
 		'yahoo' => array(
 			'url' => 'http://api.local.yahoo.com/MapsService/V1/geocode?appid=${key}&location=${address}',
@@ -168,6 +179,13 @@ class GeocodableBehavior extends ModelBehavior {
 			!empty($latitudeField) && !empty($longitudeField) &&
 			!isset($model->data[$model->alias][$latitudeField]) && !isset($model->data[$model->alias][$longitudeField])
 		) {
+
+			// If data['address'] is set, but data['address1'] is not, assume data['address'] is the street address, not the full address
+			if (!empty($model->data[$model->alias]['address']) && empty($model->data[$model->alias]['address1'])) {
+				$model->data[$model->alias]['address1'] = $model->data[$model->alias]['address'];
+				unset($model->data[$model->alias]['address']);
+			}
+
 			$data = $model->data[$model->alias];
 			if (!empty($settings['models'])) {
 				$data = $this->_data($settings['models'], $data);
@@ -175,10 +193,12 @@ class GeocodableBehavior extends ModelBehavior {
 			$geocode = $this->geocode($model, $data, false);
 			if (!empty($geocode)) {
 				$address = array();
-				list($address[$latitudeField], $address[$longitudeField]) = $geocode;
+				$address[$latitudeField] = $geocode['latitude'];
+				$address[$longitudeField] = $geocode['longitude'];
 				if (!empty($settings['fields']['address'])) {
 					$address[$settings['fields']['address']] = $this->_address($settings, $data);
 				}
+				$address = $this->_standardize($settings, $address, $geocode);
 
 				$model->data[$model->alias] = array_merge(
 					$model->data[$model->alias],
@@ -198,7 +218,7 @@ class GeocodableBehavior extends ModelBehavior {
 	 * @param object $model
 	 * @param mixed $address Array with address info (address, city, etc.) or full address as string
 	 * @param bool $save Set to true to save result in model, false otherwise
-	 * @return mixed Array (latitude, longitude), or false if error
+	 * @return mixed Array (latitude, longitude, (array)address), or false if error
 	 */
 	public function geocode($model, $address, $save = true) {
 		$settings = $this->settings[$model->alias];
@@ -245,8 +265,8 @@ class GeocodableBehavior extends ModelBehavior {
 			));
 			if (!empty($coordinates)) {
 				$coordinates = array(
-					$coordinates[$model->alias][$settings['fields']['latitude']],
-					$coordinates[$model->alias][$settings['fields']['longitude']],
+					'latitude' => $coordinates[$model->alias][$settings['fields']['latitude']],
+					'longitude' => $coordinates[$model->alias][$settings['fields']['longitude']],
 				);
 			}
 		}
@@ -261,14 +281,14 @@ class GeocodableBehavior extends ModelBehavior {
 		}
 
 		if (!empty($coordinates)) {
-			foreach($coordinates as $i => $coordinate) {
-				$coordinates[$i] = floatval($coordinate);
-			}
+			$coordinates['latitude'] = floatval($coordinates['latitude']);
+			$coordinates['longitude'] = floatval($coordinates['longitude']);
 		}
 
 		if ($save && !empty($coordinates) && !empty($data)) {
-			$data[$model->alias][$settings['fields']['latitude']] = $coordinates[0];
-			$data[$model->alias][$settings['fields']['longitude']] = $coordinates[1];
+			$data[$model->alias][$settings['fields']['latitude']] = $coordinates['latitude'];
+			$data[$model->alias][$settings['fields']['longitude']] = $coordinates['longitude'];
+			$data[$model->alias] = $this->_standardize($settings, $data[$model->alias], $coordinates);
 
 			if (!empty($data[$model->alias][$settings['fields']['state']])) {
 				$model->create();
@@ -309,6 +329,7 @@ class GeocodableBehavior extends ModelBehavior {
 			$point = $origin;
 		} else {
 			$point = $this->geocode($model, $origin);
+			$point = array( $point['latitude'], $point['longitude'] );
 		}
 
 		if (empty($point)) {
@@ -357,6 +378,7 @@ class GeocodableBehavior extends ModelBehavior {
 				$$var = $data;
 			} else {
 				$$var = $this->geocode($model, $data);
+				$$var = array( $$var['latitude'], $$var['longitude'] );
 			}
 		}
 
@@ -473,16 +495,50 @@ class GeocodableBehavior extends ModelBehavior {
 		$url = str_replace(array_keys($vars), $vars, $service['url']);
 		$result = $this->socket->get($url);
 
-		if (empty($result) || !preg_match($service['pattern'], $result, $matches)) {
-			return false;
+		if (empty($result)) return false;
+		if (!empty($service['parser'])) {
+			$parser = $service['parser'];
+			$coordinates = $this->$parser($result);
+		}
+		else if (!empty($service['pattern'])) {
+			if (!preg_match($service['pattern'], $result, $matches)) {
+				return false;
+			}
+
+			$coordinates = array(
+				'latitude' => $matches[$service['matches']['latitude']],
+				'longitude' => $matches[$service['matches']['longitude']]
+			);
 		}
 
-		$coordinates = array(
-			$matches[$service['matches']['latitude']],
-			$matches[$service['matches']['longitude']]
-		);
-
 		return $coordinates;
+	}
+
+	/**
+	 * Extract the useful data from the full Google JSON response
+	 * 
+	 * @param string $json JSON string from Google Maps API
+	 * @return array Lat/lon, street, city, state, zip, country
+	 */
+	protected function _google_json_parser($json) {
+		$data = json_decode($json);
+		
+		$place = array();
+		if (@$data->Status->code == 200) {
+			$placemark =& $data->Placemark[0];
+			$locality = $placemark->AddressDetails->Country->AdministrativeArea->SubAdministrativeArea->Locality;
+			$place = array(
+				'latitude' => $placemark->Point->coordinates[0],
+				'longitude' => $placemark->Point->coordinates[1],
+				'address' => $placemark->address,
+				'address1' => $locality->Thoroughfare->ThoroughfareName,
+				'city' => $locality->LocalityName,
+				'state' => $placemark->AddressDetails->Country->AdministrativeArea->AdministrativeAreaName,
+				'zip' => $locality->PostalCode->PostalCodeNumber,
+				'country' => $placemark->AddressDetails->Country->CountryNameCode,
+			);
+		}
+		return $place;
 	}
 
 	/**
@@ -495,6 +551,13 @@ class GeocodableBehavior extends ModelBehavior {
 	protected function _address($settings, $address) {
 		if (is_array($address)) {
 			$elements = array();
+
+			// If data['address'] is set, but data['address1'] is not, assume data['address'] is the street address, not the full address
+			if (!empty($address['address']) && empty($address['address1'])) {
+				$address['address1'] = $address['address'];
+				unset($address['address']);
+			}
+
 			foreach($settings['addressFields'] as $type => $fields) {
 				$fields = array_merge(array($type => $type), (array) $fields);
 				$elements['${' . $type . '}'] = str_replace(',', ' ', trim(current(array_intersect_key($address, array_flip($fields)))));
@@ -515,10 +578,30 @@ class GeocodableBehavior extends ModelBehavior {
 			foreach($replacements as $pattern => $replacement) {
 				$address = preg_replace($pattern, $replacement, $address);
 			}
-			$address = preg_replace('/,\s*$/', '', $address);
+
+			// Clean up any leading or trailing commas
+			$address = preg_replace('/(,\s*)*$/', '', $address);
+			$address = preg_replace('/^(\s*,)*/', '', $address);
+			$address = trim($address);
 		}
 
 		return $address;
+	}
+
+	/**
+	 * Standardize address fields in model using fields from geocoded results
+	 * @param array $settings Settings
+	 * @param array $data Model data
+	 * @param array $geocode Geocoded data
+	 * @return array $data Standardized model data
+	 */
+	protected function _standardize($settings, $data, $geocode) {
+		foreach (array_keys($this->default['addressFields']) as $field) {
+			if (!empty($geocode[$field])) {
+				$data[$settings['fields'][$field]] = $geocode[$field];
+			}
+		}
+		return $data;
 	}
 
 	/**
