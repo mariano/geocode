@@ -17,7 +17,7 @@ class GeoAddress extends AppModel {
 	 * @return array Array of records
 	 */
 	public function find($conditions = null, $fields = array(), $order = null, $recursive = null) {
-		$findMethods = array_merge($this->_findMethods, array('near'=>true));
+		$findMethods = array_merge($this->findMethods, array('near'=>true));
 		$findType = (is_string($conditions) && $conditions != 'count' && array_key_exists($conditions, $findMethods) ? $conditions : null);
 		if (empty($findType) && is_string($conditions) && $conditions == 'count' && !empty($fields['type']) && array_key_exists($fields['type'], $findMethods)) {
 			$findType = $fields['type'];

@@ -1,7 +1,7 @@
 <?php
-App::import('Behavior', 'Geocode.Geocodable');
-App::import('Model', 'Geocode.GeoAddress');
-App::import('Controller', 'Controller');
+App::uses('GeocodableBehavior', 'Geocode.Model/Behavior');
+App::uses('GeoAddress', 'Geocode.Model');
+App::uses('Controller', 'Controller');
 
 class TestGeocodableBehavior extends GeocodableBehavior {
 	public function run($method) {
@@ -46,7 +46,7 @@ class TestExtendedAddress extends GeoAddress {
 
 class GeocodableBehaviorTest extends CakeTestCase {
 	public $fixtures = array(
-		'plugin.geocode.geo_address', 'plugin.geocode.address', 'plugin.geocode.city', 'plugin.geocode.state', 'plugin.geocode.country'
+		'plugin.geocode.geoAddress', 'plugin.geocode.address', 'plugin.geocode.city', 'plugin.geocode.state', 'plugin.geocode.country'
 
 	);
 
@@ -259,8 +259,8 @@ class GeocodableBehaviorTest extends CakeTestCase {
 		$this->assertEqual($result, $expected);
 
 		if (!$this->skipIf(empty($this->Geocodable->settings[$this->Address->alias]['key']), 'No service API Key provided for test')) {
-			$result = round($this->Address->distance($origin, '3700 Rocinante Blvd, Tampa, FL', 'm'), 1);
-			$expected = 3.4;
+			$result = round($this->Address->distance($origin, '502 Warren Road, Tampa, FL', 'm'), 1);
+			$expected = 3.1;
 			$this->assertEqual($result, $expected);
 		}
 	}
@@ -484,7 +484,8 @@ class GeocodableBehaviorTest extends CakeTestCase {
 	public function testPaginate() {
 		$Controller = new Controller();
 		$Controller->uses = array('TestAddress');
-		$Controller->params['url'] = array();
+		$Controller->request = new CakeRequest();
+		$Controller->request->params['named'] = array();
 		$Controller->constructClasses();
 
 		$Controller->paginate = array('TestAddress' => array(

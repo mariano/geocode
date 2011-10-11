@@ -1,5 +1,9 @@
 <?php
-App::import('Core', array('HttpSocket', 'Security'));
+
+App::uses('HttpSocket', 'Network/Http');
+App::uses('Security', 'Utility');
+App::uses('ModelBehavior', 'Model');
+App::uses('AppModel', 'Model');
 
 class GeocodableBehavior extends ModelBehavior {
 	/**
