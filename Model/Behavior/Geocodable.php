@@ -596,7 +596,7 @@ class GeocodableBehavior extends ModelBehavior {
 	 * @return array $data Standardized model data
 	 */
 	protected function _standardize($settings, $data, $geocode) {
-		foreach (array('address1', 'address2', 'city', 'state', 'zip', 'country') as $field) {
+		foreach (array_keys($this->default['addressFields']) as $field) {
 			if (!empty($geocode[$field])) {
 				$data[$settings['fields'][$field]] = $geocode[$field];
 			}
