@@ -260,7 +260,7 @@ class GeocodableBehaviorTest extends CakeTestCase {
 
 		if (!$this->skipIf(empty($this->Geocodable->settings[$this->Address->alias]['key']), 'No service API Key provided for test')) {
 			$result = round($this->Address->distance($origin, '3700 Rocinante Blvd, Tampa, FL', 'm'), 1);
-			$expected = 3.4;
+			$expected = 9;
 			$this->assertEqual($result, $expected);
 		}
 	}
