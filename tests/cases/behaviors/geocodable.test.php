@@ -141,7 +141,11 @@ class GeocodableBehaviorTest extends CakeTestCase {
 			'state' => 'FL'
 		));
 		$expected = array(28.0792, -82.4735);
-		$this->assertEqual($result, $expected);
+		$this->assertEqual(count($result), count($expected));
+		foreach ($expected as $key => $value) {
+			$this->assertTrue(isset($result[$key]));
+			$this->assertWithinMargin($result[$key], $value, 0.001);
+		}
 
 		$this->expectError();
 		$result = $this->Address->geocode(array(
@@ -284,11 +288,16 @@ class GeocodableBehaviorTest extends CakeTestCase {
 				$result[$key] = round($distance, 3);
 			}
 			$expected = array(
-				'14348 N Rome Ave, Tampa, 33613 FL' => 0.257,
-				'1180 Magdalene Hill, Florida, US' => 0.499,
-				'9106 El Portal Dr, Tampa, FL' => 5.331
+				'14348 N Rome Ave, Tampa, 33613 FL' => 0.25,
+				'1180 Magdalene Hill, Florida, US' => 0.50,
+				'13216 Forest Hills Dr, Tampa, FL' => 1.23,
+				'9106 El Portal Dr, Tampa, FL' => 5.33
 			);
-			$this->assertEqual($result, $expected);
+			$this->assertEqual(count($result), count($expected));
+			foreach ($expected as $key => $value) {
+				$this->assertTrue(isset($result[$key]));
+				$this->assertWithinMargin($result[$key], $value, 0.01);
+			}
 		}
 
 		$result = $this->Address->near('all', '1209 La Brad Lane, Tampa, FL', 1);
@@ -299,10 +308,14 @@ class GeocodableBehaviorTest extends CakeTestCase {
 				$result[$key] = round($distance, 3);
 			}
 			$expected = array(
-				'14348 N Rome Ave, Tampa, 33613 FL' => 0.257,
-				'1180 Magdalene Hill, Florida, US' => 0.499
+				'14348 N Rome Ave, Tampa, 33613 FL' => 0.25,
+				'1180 Magdalene Hill, Florida, US' => 0.50
 			);
-			$this->assertEqual($result, $expected);
+			$this->assertEqual(count($result), count($expected));
+			foreach ($expected as $key => $value) {
+				$this->assertTrue(isset($result[$key]));
+				$this->assertWithinMargin($result[$key], $value, 0.01);
+			}
 		}
 
 		$result = $this->Address->near('count', '1209 La Brad Lane, Tampa, FL', 1);
@@ -316,10 +329,14 @@ class GeocodableBehaviorTest extends CakeTestCase {
 				$result[$key] = round($distance, 3);
 			}
 			$expected = array(
-				'14348 N Rome Ave, Tampa, 33613 FL' => 0.160,
-				'1180 Magdalene Hill, Florida, US' => 0.310
+				'14348 N Rome Ave, Tampa, 33613 FL' => 0.16,
+				'1180 Magdalene Hill, Florida, US' => 0.31
 			);
-			$this->assertEqual($result, $expected);
+			$this->assertEqual(count($result), count($expected));
+			foreach ($expected as $key => $value) {
+				$this->assertTrue(isset($result[$key]));
+				$this->assertWithinMargin($result[$key], $value, 0.01);
+			}
 		}
 	}
 
@@ -428,59 +445,6 @@ class GeocodableBehaviorTest extends CakeTestCase {
 		}
 	}
 
-	public function testFind() {
-		$result = $this->Address->find('near', array('address'=>array(25.7953, -80.2789)));
-		$expected = 331;
-		$this->assertTrue(!empty($result[0]));
-		$this->assertEqual(ceil($result[0][$this->Address->alias]['distance']), $expected);
-
-		$result = $this->Address->find('near', array('address'=>'1209 La Brad Lane, Tampa, FL'));
-		$this->assertTrue(!empty($result));
-		if (!empty($result)) {
-			$result = Set::combine($result, '/' . $this->Address->alias . '/address', '/' . $this->Address->alias . '/distance');
-			foreach($result as $key => $distance) {
-				$result[$key] = round($distance, 3);
-			}
-			$expected = array(
-				'14348 N Rome Ave, Tampa, 33613 FL' => 0.257,
-				'1180 Magdalene Hill, Florida, US' => 0.499,
-				'9106 El Portal Dr, Tampa, FL' => 5.331
-			);
-			$this->assertEqual($result, $expected);
-		}
-
-		$result = $this->Address->find('near', array('address'=>'1209 La Brad Lane, Tampa, FL', 'distance'=>1));
-		$this->assertTrue(!empty($result));
-		if (!empty($result)) {
-			$result = Set::combine($result, '/' . $this->Address->alias . '/address', '/' . $this->Address->alias . '/distance');
-			foreach($result as $key => $distance) {
-				$result[$key] = round($distance, 3);
-			}
-			$expected = array(
-				'14348 N Rome Ave, Tampa, 33613 FL' => 0.257,
-				'1180 Magdalene Hill, Florida, US' => 0.499
-			);
-			$this->assertEqual($result, $expected);
-		}
-
-		$result = $this->Address->find('count', array('type'=>'near', 'address'=>'1209 La Brad Lane, Tampa, FL', 'distance'=>1));
-		$this->assertEqual($result, 2);
-
-		$result = $this->Address->find('near', array('address'=>'1209 La Brad Lane, Tampa, FL', 'distance'=>0.5, 'unit'=>'m'));
-		$this->assertTrue(!empty($result));
-		if (!empty($result)) {
-			$result = Set::combine($result, '/' . $this->Address->alias . '/address', '/' . $this->Address->alias . '/distance');
-			foreach($result as $key => $distance) {
-				$result[$key] = round($distance, 3);
-			}
-			$expected = array(
-				'14348 N Rome Ave, Tampa, 33613 FL' => 0.160,
-				'1180 Magdalene Hill, Florida, US' => 0.310
-			);
-			$this->assertEqual($result, $expected);
-		}
-	}
-
 	public function testPaginate() {
 		$Controller = new Controller();
 		$Controller->uses = array('TestAddress');
@@ -502,7 +466,11 @@ class GeocodableBehaviorTest extends CakeTestCase {
 				'14348 N Rome Ave, Tampa, 33613 FL' => 0.257,
 				'1180 Magdalene Hill, Florida, US' => 0.499
 			);
-			$this->assertEqual($result, $expected);
+			$this->assertEqual(count($result), count($expected));
+			foreach ($expected as $key => $value) {
+				$this->assertTrue(isset($result[$key]));
+				$this->assertWithinMargin($result[$key], $value, 0.01);
+			}
 		}
 
 		$Controller->paginate = array('TestAddress' => array(
@@ -518,9 +486,14 @@ class GeocodableBehaviorTest extends CakeTestCase {
 				$result[$key] = round($distance, 3);
 			}
 			$expected = array(
+				'13216 Forest Hills Dr, Tampa, FL' => 1.23,
 				'9106 El Portal Dr, Tampa, FL' => 5.331
 			);
-			$this->assertEqual($result, $expected);
+			$this->assertEqual(count($result), count($expected));
+			foreach ($expected as $key => $value) {
+				$this->assertTrue(isset($result[$key]));
+				$this->assertWithinMargin($result[$key], $value, 0.01);
+			}
 		}
 
 		$Controller->paginate = array('TestAddress' => array(
@@ -538,7 +511,11 @@ class GeocodableBehaviorTest extends CakeTestCase {
 				'14348 N Rome Ave, Tampa, 33613 FL' => 0.160,
 				'1180 Magdalene Hill, Florida, US' => 0.310
 			);
-			$this->assertEqual($result, $expected);
+			$this->assertEqual(count($result), count($expected));
+			foreach ($expected as $key => $value) {
+				$this->assertTrue(isset($result[$key]));
+				$this->assertWithinMargin($result[$key], $value, 0.01);
+			}
 		}
 
 		$Controller->paginate = array('TestAddress' => array(
@@ -555,7 +532,11 @@ class GeocodableBehaviorTest extends CakeTestCase {
 			$expected = array(
 				'14348 N Rome Ave, Tampa, 33613 FL' => 0.160
 			);
-			$this->assertEqual($result, $expected);
+			$this->assertEqual(count($result), count($expected));
+			foreach ($expected as $key => $value) {
+				$this->assertTrue(isset($result[$key]));
+				$this->assertWithinMargin($result[$key], $value, 0.01);
+			}
 		}
 	}
 }

@@ -3,6 +3,13 @@ App::import('Core', array('HttpSocket', 'Security'));
 
 class GeocodableBehavior extends ModelBehavior {
 	/**
+	 * Allows to use custom finds in behavior
+	 *
+	 * @var array
+	 */
+	public $mapMethods = array('/\b_findNear\b/' => '_findNear');
+
+	/**
 	 * Behavior settings
 	 *
 	 * @var array
@@ -88,6 +95,8 @@ class GeocodableBehavior extends ModelBehavior {
 	 * @param array $settings Settings
 	 */
 	public function setup($model, $settings = array()) {
+		$model->_findMethods['near'] = true;
+
 		if (!isset($this->settings[$model->alias])) {
 			$configured = Configure::read('Geocode');
 			if (!empty($configured)) {
@@ -291,46 +300,24 @@ class GeocodableBehavior extends ModelBehavior {
 	 * @return mixed Results
 	 */
 	public function near($model, $type, $origin, $distance = null, $unit = 'k', $query = array()) {
-		$settings = $this->settings[$model->alias];
-		list($latitudeField, $longitudeField) = array(
-			$settings['fields']['latitude'],
-			$settings['fields']['longitude'],
-		);
-
-		if (!empty($query['fields'])) {
-			$query['fields'] = array_merge($query['fields'], array(
-				$latitudeField,
-				$longitudeField
-			));
+		$query['origin'] = $origin;
+		$query['distance'] = $distance;
+		$query['unit'] = $unit;
+		if ($type == 'count') {
+			$query['operation'] = 'count';
 		}
-
-		$point = null;
-		if (is_array($origin) && count($origin) == 2 && isset($origin[0]) && isset($origin[1]) && is_numeric($origin[0]) && is_numeric($origin[1])) {
-			$point = $origin;
+		$results = $model->find('near', $query);
+			if(empty ($query['order'])) {
+			//	usort($results, self::orderByDistance);
+			}
+		if ($type == 'first') {
+			if (!empty($results[0])) {
+				$result = $results[0];
+			} else {
+				$result = false;
+			}
 		} else {
-			$point = $this->geocode($model, $origin);
-		}
-
-		if (empty($point)) {
-			return false;
-		}
-
-		if (empty($query['order'])) {
-			unset($query['order']);
-		}
-
-		$query = Set::merge(
-			$this->distanceQuery($model, $point, $distance, $unit, !empty($query['direction']) ? $query['direction'] : 'ASC'),
-			array_diff_key($query, array('direction'=>true))
-		);
-
-		if ($type == 'count' && !empty($query['order'])) {
-			unset($query['order']);
-		}
-		$result = $model->find($type, $query);
-
-		if (!empty($result) && $type != 'count') {
-			$result = $this->_loadDistance($model, $result, $point, $unit, $model->alias, $latitudeField, $longitudeField);
+			$result = $results;
 		}
 
 		return $result;
@@ -565,6 +552,99 @@ class GeocodableBehavior extends ModelBehavior {
 
 		return $data;
 	}
-}
 
-?>
+/**
+ * Custom find method to find the most recent job offers. By default 5 results are returned
+ *
+ * @param array $models Model instance
+ * @method string $method The method call
+ * @param string $state Either "before" or "after"
+ * @param array $query Find parameters with keys "origin", "distance" (default: null) and "unit" (default: "k").
+ * @param array $results
+ * @return array
+ * @see Model::find()
+ */
+	protected function _findNear($model, $method, $state, $query, $results = array()) {
+
+		if ($state == 'before') {
+			$query = $this->__prepareQuery($model, $query);
+			if (isset($query['operation']) && $query['operation'] == 'count') {
+				$query = $model->_findCount($state, $query, $results);
+			}
+			return $query;
+		} elseif ($state == 'after') {
+
+			if (empty($query['point'])) {
+				return false;
+			} else {
+				if (isset($query['operation']) && $query['operation'] == 'count' && !empty($query['order'])) {
+					unset($query['order']);
+				}
+			}
+
+			if (isset($query['operation']) && $query['operation'] == 'count') {
+				$results = $model->_findCount($state, $query, $results);
+			} else {
+				$results = $this->_loadDistance($model, $results, $query['point'], $query['unit'],
+					$model->alias, $query['latitudeField'], $query['longitudeField']);
+			}
+			return $results;
+		}
+	}
+
+/**
+ * Add complementary information to the query
+ *
+ * @param array $query The query before updating
+ * @return array The query updated
+ * @see GeocodableBehavior::_findNear() for $query keys
+ */
+	private function __prepareQuery($model, $query) {
+		$_defaults = array(
+			'distance' => null,
+			'unit' => 'k',
+		);
+		if(!empty($query['origin'])) {
+			$origin = $query['origin'];
+		} elseif (!empty($query['address'])) {
+			$origin = $query['address'];
+		} else {
+			$origin = array((float) '0', (float) '0');
+			$query['conditions'] = array('1=0');
+		}
+		$query = array_merge($_defaults, $query);
+
+		$settings = $this->settings[$model->alias];
+		list($query['latitudeField'], $query['longitudeField']) = array(
+			$settings['fields']['latitude'],
+			$settings['fields']['longitude'],
+		);
+
+		if (!empty($query['fields']) && is_array($query['fields'])) {
+			$query['fields'] = array_merge($query['fields'], array(
+				$query['latitudeField'],
+				$query['longitudeField']
+			));
+		}
+
+		$query['point'] = null;
+		if (is_array($origin) && count($origin) == 2 && isset($origin[0]) && isset($origin[1]) && is_numeric($origin[0]) && is_numeric($origin[1])) {
+			$query['point'] = $origin;
+		} else {
+			$query['point'] = $this->geocode($model, $origin);
+		}
+		if (empty($query['order'])) {
+			unset($query['order']);
+		}
+		if (empty($query['conditions'])) {
+			unset($query['conditions']);
+		}
+
+		$query = Set::merge(
+			$this->distanceQuery($model, $query['point'], $query['distance'], $query['unit'], !empty($query['direction']) ? $query['direction'] : 'ASC'),
+			array_diff_key($query, array('direction'=>true))
+		);
+
+		return $query;
+	}
+}
